@@ -1,0 +1,32 @@
+name: Deploy PHP App to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH key
+        run: |
+          echo "${{ secrets.EC2_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Copy files to EC2
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+        run: |
+          scp -i key.pem -o StrictHostKeyChecking=no -r public/* $USER@$HOST:/var/www/html/
+
+      - name: Restart Apache on EC2
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "sudo systemctl restart apache2"
