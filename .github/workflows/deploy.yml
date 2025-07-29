@@ -7,27 +7,41 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: AWS EC2  # This MUST match the environment name exactly
+    environment: AWS EC2  #  this matches the name in your GitHub environment
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up SSH key
-        run: |
-          echo "${{ secrets.EC2_KEY }}" > key.pem
-          chmod 600 key.pem
+    - name: Set up SSH key
+      run: |
+        echo "${{ secrets.EC2_KEY }}" > key.pem
+        chmod 600 key.pem
 
-      - name: Copy files to EC2
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
-        run: |
-          scp -i key.pem -o StrictHostKeyChecking=no -r public/* $USER@$HOST:/var/www/html/
+    - name: Create temp folder on EC2 (if not exists)
+      env:
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "mkdir -p /home/$USER/app-temp"
 
-      - name: Restart Apache on EC2
-        env:
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
-        run: |
-          ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "sudo systemctl restart apache2"
+    - name: Copy PHP files to EC2 temp folder
+      env:
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        scp -i key.pem -o StrictHostKeyChecking=no -r public/* $USER@$HOST:/home/$USER/app-temp/
+
+    - name: Move files to /var/www/html with sudo
+      env:
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "sudo mv /home/$USER/app-temp/* /var/www/html/"
+
+    - name: Restart Apache on EC2
+      env:
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        ssh -i key.pem -o StrictHostKeyChecking=no $USER@$HOST "sudo systemctl restart apache2"
